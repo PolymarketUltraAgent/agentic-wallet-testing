@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Circle Agent Wallet Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 24px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    h1 {
+      color: #58a6ff;
+      font-size: 1.5rem;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      color: #8b949e;
+      font-size: 0.85rem;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .card h2 {
+      color: #58a6ff;
+      font-size: 0.95rem;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card h2 .step-num {
+      background: #58a6ff;
+      color: #0d1117;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: bold;
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    label {
+      color: #8b949e;
+      font-size: 0.8rem;
+      min-width: 60px;
+    }
+    input[type="text"], input[type="email"], input[type="number"] {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #c9d1d9;
+      padding: 8px 12px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      flex: 1;
+    }
+    input:focus { outline: none; border-color: #58a6ff; }
+    button {
+      background: #238636;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-family: inherit;
+      font-size: 0.8rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    button:hover { background: #2ea043; }
+    button:disabled {
+      background: #21262d;
+      color: #484f58;
+      cursor: not-allowed;
+    }
+    button.secondary {
+      background: #30363d;
+      color: #c9d1d9;
+    }
+    button.secondary:hover { background: #3b424a; }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      padding: 8px 0;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot.idle { background: #484f58; }
+    .dot.running { background: #d29922; animation: pulse 1s infinite; }
+    .dot.success { background: #3fb950; }
+    .dot.error { background: #f85149; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .info-grid {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 8px 16px;
+      font-size: 0.85rem;
+    }
+    .info-grid .label { color: #8b949e; }
+    .info-grid .value { color: #c9d1d9; word-break: break-all; }
+    .value.highlight { color: #3fb950; font-weight: bold; }
+    #agent-log {
+      background: #010409;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      padding: 16px;
+      height: 350px;
+      overflow-y: auto;
+      font-size: 0.78rem;
+      line-height: 1.6;
+    }
+    .log-entry { margin-bottom: 4px; }
+    .log-cmd { color: #79c0ff; }
+    .log-ok { color: #3fb950; }
+    .log-err { color: #f85149; }
+    .log-info { color: #d29922; }
+    .log-time { color: #484f58; margin-right: 8px; }
+    .bridge-options {
+      display: flex;
+      gap: 8px;
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1>Circle Agent Wallet Demo</h1>
+  <p class="subtitle">Create wallet, store session, bridge USDC from Arc Testnet to Polygon Amoy</p>
+
+  <!-- Step 1: Create Wallet -->
+  <div class="card">
+    <h2><span class="step-num">1</span> Create Wallet</h2>
+    <div class="row">
+      <label>User ID</label>
+      <input type="text" id="userId" placeholder="e.g. user-001" value="demo-user-1" />
+    </div>
+    <div class="row">
+      <label>Email</label>
+      <input type="email" id="email" placeholder="you@example.com" />
+      <button id="btnSendOtp" onclick="sendOtp()">Send OTP</button>
+    </div>
+    <div id="otpRow" class="row hidden">
+      <label>OTP</label>
+      <input type="text" id="otp" placeholder="ABC-123456" />
+      <button id="btnVerify" onclick="verifyOtp()">Verify</button>
+    </div>
+    <div class="status">
+      <span class="dot idle" id="loginDot"></span>
+      <span id="loginStatus">Waiting for email...</span>
+    </div>
+  </div>
+
+  <!-- Step 2: Session & Wallet Info -->
+  <div class="card">
+    <h2><span class="step-num">2</span> Session & Wallet Info</h2>
+    <div class="info-grid">
+      <span class="label">User ID</span>
+      <span class="value" id="infoUserId">&mdash;</span>
+      <span class="label">Wallet Address</span>
+      <span class="value" id="infoWallet">&mdash;</span>
+      <span class="label">Session Expires</span>
+      <span class="value" id="infoExpires">&mdash;</span>
+      <span class="label">Arc Testnet</span>
+      <span class="value" id="infoArcBalance">&mdash;</span>
+      <span class="label">Base Sepolia</span>
+      <span class="value" id="infoBaseBalance">&mdash;</span>
+      <span class="label">Polygon Amoy</span>
+      <span class="value highlight" id="infoPolygonBalance">&mdash;</span>
+    </div>
+    <div style="margin-top: 12px">
+      <button class="secondary" onclick="refreshWallet()" id="btnRefresh" disabled>Refresh Balances</button>
+      <button class="secondary" onclick="logout()" style="margin-left:8px;color:#f85149;">Logout</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Fund & Bridge -->
+  <div class="card">
+    <h2><span class="step-num">3</span> Fund & Bridge</h2>
+    <div class="row">
+      <label>Amount</label>
+      <input type="number" id="bridgeAmount" placeholder="5" value="5" min="0.01" step="0.01" />
+      <span style="color: #8b949e; font-size: 0.85rem;">USDC</span>
+    </div>
+    <div class="row">
+      <label>Source</label>
+      <select id="sourceChain" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;padding:8px;font-family:inherit;font-size:0.85rem;">
+        <option value="BASE-SEPOLIA">Base Sepolia</option>
+        <option value="ARC-TESTNET">Arc Testnet</option>
+        <option value="MATIC-AMOY">Polygon Amoy (direct fund)</option>
+      </select>
+    </div>
+    <div class="row bridge-options">
+      <button id="btnFund" onclick="fundWallet()" disabled>Fund Source Chain</button>
+      <button id="btnBridge" onclick="bridge()" disabled>Bridge to Polygon Amoy</button>
+      <button id="btnFundPolygon" onclick="fundPolygonDirect()" disabled>Fund Polygon Directly</button>
+    </div>
+    <div class="status">
+      <span class="dot idle" id="bridgeDot"></span>
+      <span id="bridgeStatus">Idle</span>
+    </div>
+  </div>
+
+  <!-- Agent Log -->
+  <div class="card">
+    <h2><span class="step-num">&gt;</span> Agent Log</h2>
+    <div id="agent-log"></div>
+  </div>
+
+  <script>
+    let currentUserId = null;
+    let currentRequestId = null;
+    let eventSource = null;
+
+    function enableButtons() {
+      document.getElementById('btnRefresh').disabled = false;
+      document.getElementById('btnFund').disabled = false;
+      document.getElementById('btnBridge').disabled = false;
+      document.getElementById('btnFundPolygon').disabled = false;
+    }
+
+    function disableButtons() {
+      document.getElementById('btnRefresh').disabled = true;
+      document.getElementById('btnFund').disabled = true;
+      document.getElementById('btnBridge').disabled = true;
+      document.getElementById('btnFundPolygon').disabled = true;
+    }
+
+    function logout() {
+      localStorage.removeItem('walletUserId');
+      localStorage.removeItem('walletEmail');
+      currentUserId = null;
+      currentRequestId = null;
+      if (eventSource) eventSource.close();
+      eventSource = null;
+      disableButtons();
+      setDot('loginDot', 'idle');
+      setDot('bridgeDot', 'idle');
+      document.getElementById('loginStatus').textContent = 'Waiting for email...';
+      document.getElementById('bridgeStatus').textContent = 'Idle';
+      document.getElementById('otpRow').classList.add('hidden');
+      document.getElementById('infoUserId').textContent = '—';
+      document.getElementById('infoWallet').textContent = '—';
+      document.getElementById('infoExpires').textContent = '—';
+      document.getElementById('infoArcBalance').textContent = '—';
+      document.getElementById('infoBaseBalance').textContent = '—';
+      document.getElementById('infoPolygonBalance').textContent = '—';
+      document.getElementById('agent-log').innerHTML = '';
+      log('info', 'Logged out. Session cleared.');
+    }
+
+    window.addEventListener('load', async () => {
+      const savedUserId = localStorage.getItem('walletUserId');
+      const savedEmail = localStorage.getItem('walletEmail');
+      if (savedUserId) {
+        currentUserId = savedUserId;
+        document.getElementById('userId').value = savedUserId;
+        if (savedEmail) document.getElementById('email').value = savedEmail;
+        connectSSE(savedUserId);
+        setDot('loginDot', 'success');
+        document.getElementById('loginStatus').textContent = 'Session restored.';
+        enableButtons();
+        log('info', `Restored session for ${savedUserId}`);
+        await refreshWallet();
+      }
+    });
+
+    function time() {
+      return new Date().toLocaleTimeString('en-US', { hour12: false });
+    }
+
+    function log(type, text) {
+      const el = document.getElementById('agent-log');
+      const cls = { cmd: 'log-cmd', ok: 'log-ok', err: 'log-err', info: 'log-info' }[type] || '';
+      const prefix = { cmd: '> ', ok: '  ✓ ', err: '  ✗ ', info: '  → ' }[type] || '  ';
+      el.innerHTML += `<div class="log-entry"><span class="log-time">${time()}</span><span class="${cls}">${prefix}${escapeHtml(text)}</span></div>`;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function setDot(id, state) {
+      const dot = document.getElementById(id);
+      dot.className = `dot ${state}`;
+    }
+
+    function connectSSE(userId) {
+      if (eventSource) eventSource.close();
+      eventSource = new EventSource(`/api/events/${userId}`);
+      eventSource.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.command) log('cmd', data.command);
+        if (data.status === 'success' && data.output) log('ok', data.output);
+        if (data.status === 'error' && data.error) log('err', data.error);
+        if (data.status === 'running' && data.output) log('info', data.output);
+      };
+    }
+
+    async function sendOtp() {
+      const userId = document.getElementById('userId').value.trim();
+      const email = document.getElementById('email').value.trim();
+      if (!userId || !email) { log('err', 'User ID and email are required'); return; }
+
+      currentUserId = userId;
+      document.getElementById('btnSendOtp').disabled = true;
+      setDot('loginDot', 'running');
+      document.getElementById('loginStatus').textContent = 'Sending OTP...';
+      log('info', `Initiating login for ${email}`);
+
+      connectSSE(userId);
+
+      try {
+        const res = await fetch('/api/login/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, email }),
+        });
+        const data = await res.json();
+
+        if (data.error) throw new Error(data.error);
+
+        currentRequestId = data.requestId;
+        document.getElementById('otpRow').classList.remove('hidden');
+        document.getElementById('otp').focus();
+        setDot('loginDot', 'running');
+        document.getElementById('loginStatus').textContent = `OTP sent to ${email}. Check your inbox.`;
+        log('ok', `OTP sent. Request ID: ${data.requestId}`);
+      } catch (e) {
+        setDot('loginDot', 'error');
+        document.getElementById('loginStatus').textContent = e.message;
+        log('err', e.message);
+      }
+      document.getElementById('btnSendOtp').disabled = false;
+    }
+
+    async function verifyOtp() {
+      const otp = document.getElementById('otp').value.trim();
+      if (!otp || !currentRequestId) return;
+
+      document.getElementById('btnVerify').disabled = true;
+      setDot('loginDot', 'running');
+      document.getElementById('loginStatus').textContent = 'Verifying OTP...';
+
+      try {
+        const res = await fetch('/api/login/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUserId, requestId: currentRequestId, otp }),
+        });
+        const data = await res.json();
+
+        if (data.error) throw new Error(data.error);
+
+        setDot('loginDot', 'success');
+        document.getElementById('loginStatus').textContent = 'Logged in! Wallet created.';
+        log('ok', `Wallet address: ${data.walletAddress}`);
+
+        localStorage.setItem('walletUserId', currentUserId);
+        localStorage.setItem('walletEmail', document.getElementById('email').value.trim());
+
+        enableButtons();
+        await refreshWallet();
+      } catch (e) {
+        setDot('loginDot', 'error');
+        document.getElementById('loginStatus').textContent = e.message;
+        log('err', e.message);
+      }
+      document.getElementById('btnVerify').disabled = false;
+    }
+
+    async function refreshWallet() {
+      if (!currentUserId) return;
+      log('info', 'Refreshing wallet info...');
+
+      try {
+        const res = await fetch(`/api/wallet/${currentUserId}`);
+        const data = await res.json();
+
+        if (data.error) throw new Error(data.error);
+
+        const u = data.user;
+        document.getElementById('infoUserId').textContent = u.userId;
+        document.getElementById('infoWallet').textContent = u.walletAddress || '—';
+        document.getElementById('infoExpires').textContent = u.sessionExpires
+          ? new Date(u.sessionExpires).toLocaleString()
+          : '—';
+
+        const arcBal = data.balances.arcTestnet;
+        const baseBal = data.balances.baseSepolia;
+        const polyBal = data.balances.polygonAmoy;
+        document.getElementById('infoArcBalance').textContent =
+          arcBal?.length > 0 ? arcBal.map(b => `${b.amount} ${b.symbol}`).join(', ') : '0 USDC';
+        document.getElementById('infoBaseBalance').textContent =
+          baseBal?.length > 0 ? baseBal.map(b => `${b.amount} ${b.symbol}`).join(', ') : '0 USDC';
+        document.getElementById('infoPolygonBalance').textContent =
+          polyBal?.length > 0 ? polyBal.map(b => `${b.amount} ${b.symbol}`).join(', ') : '0 USDC';
+
+        log('ok', 'Wallet info refreshed');
+      } catch (e) {
+        log('err', `Refresh failed: ${e.message}`);
+      }
+    }
+
+    async function fundWallet() {
+      if (!currentUserId) return;
+      const chain = document.getElementById('sourceChain').value;
+      document.getElementById('btnFund').disabled = true;
+      setDot('bridgeDot', 'running');
+      document.getElementById('bridgeStatus').textContent = `Requesting faucet on ${chain}...`;
+
+      try {
+        const res = await fetch('/api/fund', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUserId, chain }),
+        });
+        const data = await res.json();
+
+        if (data.error) throw new Error(data.error);
+
+        setDot('bridgeDot', 'success');
+        document.getElementById('bridgeStatus').textContent = `Funded on ${chain}!`;
+        await refreshWallet();
+      } catch (e) {
+        setDot('bridgeDot', 'error');
+        document.getElementById('bridgeStatus').textContent = e.message;
+        log('err', e.message);
+      }
+      document.getElementById('btnFund').disabled = false;
+    }
+
+    async function fundPolygonDirect() {
+      if (!currentUserId) return;
+      document.getElementById('btnFundPolygon').disabled = true;
+      setDot('bridgeDot', 'running');
+      document.getElementById('bridgeStatus').textContent = 'Funding Polygon Amoy directly...';
+
+      try {
+        const res = await fetch('/api/fund', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUserId, chain: 'MATIC-AMOY' }),
+        });
+        const data = await res.json();
+
+        if (data.error) throw new Error(data.error);
+
+        setDot('bridgeDot', 'success');
+        document.getElementById('bridgeStatus').textContent = 'Polygon Amoy funded!';
+        await refreshWallet();
+      } catch (e) {
+        setDot('bridgeDot', 'error');
+        document.getElementById('bridgeStatus').textContent = e.message;
+        log('err', e.message);
+      }
+      document.getElementById('btnFundPolygon').disabled = false;
+    }
+
+    async function bridge() {
+      if (!currentUserId) return;
+      const amount = document.getElementById('bridgeAmount').value;
+      const sourceChain = document.getElementById('sourceChain').value;
+      if (!amount || parseFloat(amount) <= 0) { log('err', 'Enter a valid amount'); return; }
+      if (sourceChain === 'MATIC-AMOY') { log('err', 'Cannot bridge from Polygon Amoy to itself. Use "Fund Polygon Directly" instead.'); return; }
+      if (sourceChain === 'ARC-TESTNET') { log('err', 'Arc Testnet USDC is a native gas token, not ERC20. CCTP/Gateway cannot bridge it. Use Base Sepolia instead.'); return; }
+
+      document.getElementById('btnBridge').disabled = true;
+      setDot('bridgeDot', 'running');
+      document.getElementById('bridgeStatus').textContent = `CCTP bridge ${sourceChain} → Polygon Amoy...`;
+
+      try {
+        const res = await fetch('/api/bridge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUserId, amount, sourceChain }),
+        });
+        const data = await res.json();
+
+        if (data.error) throw new Error(data.error);
+
+        setDot('bridgeDot', 'success');
+        document.getElementById('bridgeStatus').textContent = 'Bridge complete!';
+        await refreshWallet();
+      } catch (e) {
+        setDot('bridgeDot', 'error');
+        document.getElementById('bridgeStatus').textContent = e.message;
+        log('err', e.message);
+      }
+      document.getElementById('btnBridge').disabled = false;
+    }
+  </script>
+</body>
+</html>
